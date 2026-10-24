@@ -1,0 +1,34 @@
+# Git ignore template
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Secrets and environment files
+.env
+.env.local
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+
+# Node
+node_modules/
+.npm/
+
+# Logs
+*.log
+
+# Editor files
+.vscode/
+.idea/
+
+# Temporary files
+/tmp/
+*.tmp
