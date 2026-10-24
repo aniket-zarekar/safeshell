@@ -1,45 +1,22 @@
 # Agents
 
-This directory contains agent-oriented projects and task-focused system components.
+This directory contains agent-oriented projects and task-focused workflow components for SafeShell.
 
-## Purpose
+## Current contents
 
-Agents in this repository are expected to perform focused operational work such as:
+- `safety-checker/` — a starter agent that evaluates the safety of shell commands before execution.
 
-- evaluating shell commands for risk
-- enforcing safety constraints
-- coordinating command execution flows
-- supporting developer AI workflows
+## Agent standards
 
-## Standards
+Each agent should:
 
-Each agent directory should include:
+- provide a clear purpose
+- document setup and usage
+- keep decisions explainable
+- respect safety constraints
 
-- a clear purpose statement
-- setup instructions
-- input and output expectations
-- safety or validation guidance
+## Example
 
-## Recommended structure
-
-```text
-agents/
-├── README.md
-└── <agent-name>/
-    ├── README.md
-    ├── main.py or entrypoint
-    └── requirements.txt or config file
+```bash
+python3 agents/safety-checker/agent.py "rm -rf /tmp/demo"
 ```
-
-## Contribution pattern
-
-When adding a new agent:
-
-1. Create a dedicated directory in `agents/`.
-2. Document the agent purpose and behavior.
-3. Clearly describe its responsibilities and boundaries.
-4. Ensure it does not bypass required safety checks.
-
-## Notes
-
-Agent implementations should favor explicit behavior, observability, and safe defaults over implicit automation.

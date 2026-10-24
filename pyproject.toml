@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "safeshell"
+version = "0.1.0"
+description = "Safety layer for shell command execution"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+  "openai>=1.0.0",
+]
+
+[project.scripts]
+guard = "safeshell.cli:main"
+
+[tool.setuptools]
+packages = ["safeshell"]

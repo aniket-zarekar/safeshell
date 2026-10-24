@@ -1,0 +1,127 @@
+import os
+import re
+from typing import Optional
+
+from openai import OpenAI
+
+from safeshell.models import CommandAssessment
+from safeshell.rules import (
+    CRITICAL_PATTERNS,
+    DESTRUCTIVE_PATTERNS,
+    HIGH_RISK_PATTERNS,
+    MEDIUM_RISK_PATTERNS,
+    SAFE_ALTERNATIVES,
+)
+
+
+def _matches_any(command: str, patterns: list[str]) -> bool:
+    lowered = command.lower()
+    return any(pattern.lower() in lowered for pattern in patterns)
+
+
+def _safe_alternative_for(command: str) -> Optional[str]:
+    lowered = command.lower()
+    for pattern, alt in SAFE_ALTERNATIVES.items():
+        if pattern in lowered:
+            return alt
+    return None
+
+
+def _heuristic_assessment(command: str, cwd: str) -> CommandAssessment:
+    lowered = command.lower().strip()
+
+    if _matches_any(lowered, CRITICAL_PATTERNS):
+        return CommandAssessment(
+            risk_level="CRITICAL",
+            is_destructive=True,
+            summary="This command is highly destructive and may wipe or corrupt critical system state.",
+            blast_radius="System files, user data, or storage volumes may be erased or permanently damaged.",
+            safe_alternative=_safe_alternative_for(lowered) or "Avoid this action entirely and verify the target before proceeding.",
+        )
+
+    if _matches_any(lowered, DESTRUCTIVE_PATTERNS):
+        return CommandAssessment(
+            risk_level="HIGH",
+            is_destructive=True,
+            summary="This command removes or overwrites files and may affect the surrounding environment.",
+            blast_radius="Files in the target directory or volume may be deleted, modified, or made unrecoverable.",
+            safe_alternative=_safe_alternative_for(lowered) or "Use a dry run, target a specific directory, or back up first.",
+        )
+
+    if _matches_any(lowered, HIGH_RISK_PATTERNS):
+        return CommandAssessment(
+            risk_level="HIGH",
+            is_destructive=False,
+            summary="This command can access or modify sensitive system or network state.",
+            blast_radius="It may change environment configuration, run privileged actions, or impact other services.",
+            safe_alternative=_safe_alternative_for(lowered) or "Review the target path and use a narrower, more explicit command.",
+        )
+
+    if _matches_any(lowered, MEDIUM_RISK_PATTERNS):
+        return CommandAssessment(
+            risk_level="MEDIUM",
+            is_destructive=False,
+            summary="This command changes or inspects files outside the immediate project scope.",
+            blast_radius="It may affect local files, dependencies, or configuration outside the current working directory.",
+            safe_alternative=_safe_alternative_for(lowered) or "Run the action in a specific subdirectory and verify the target path first.",
+        )
+
+    return CommandAssessment(
+        risk_level="LOW",
+        is_destructive=False,
+        summary="This command appears routine and limited to the current working context.",
+        blast_radius="Low impact: it is unlikely to delete data or affect system-wide state.",
+        safe_alternative=None,
+    )
+
+
+def _llm_assessment(command: str, cwd: str) -> Optional[CommandAssessment]:
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return None
+
+    try:
+        client = OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a shell safety evaluator. "
+                        "Return a JSON object with keys: risk_level, is_destructive, summary, blast_radius, safe_alternative. "
+                        "Use only LOW, MEDIUM, HIGH, CRITICAL for risk_level."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": f"Target Command: {command}\nCurrent Working Directory: {cwd}\nUser: {os.getenv('USER', 'developer')}",
+                },
+            ],
+            temperature=0.0,
+            response_format={"type": "json_object"},
+        )
+        content = response.choices[0].message.content
+        if not content:
+            return None
+
+        import json
+
+        payload = json.loads(content)
+        return CommandAssessment(
+            risk_level=str(payload.get("risk_level", "LOW")).upper(),
+            is_destructive=bool(payload.get("is_destructive", False)),
+            summary=str(payload.get("summary", "Command reviewed.")),
+            blast_radius=str(payload.get("blast_radius", "Limited to the current execution context.")),
+            safe_alternative=(payload.get("safe_alternative") or None),
+        )
+    except Exception:
+        return None
+
+
+def evaluate_command(command: str, cwd: str) -> CommandAssessment:
+    """Evaluate a shell command and return a structured risk assessment."""
+    llm_result = _llm_assessment(command, cwd)
+    if llm_result:
+        return llm_result
+    return _heuristic_assessment(command, cwd)
